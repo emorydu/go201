@@ -529,7 +529,38 @@ m := map[stirng]string{"go": "Go"}
 
 4. map复合字面值
 ```go
+var unitMap = map[string]int64 {
+    "ns": int64(Nanosecond),
+    "us": int64(Microsecond),
+    "ms": int64(Millisecond),
+    ...
+}
+
+var stateName = map[ConnState]string {
+    StateNew: "new",
+    StateActive: "active",
+    ...
+}
 ```
+
+⭐️⭐️ 切片实现原理
+
+1. 数组是`固定长度、同类型连续序列`，传递数组属于值拷贝行为，性能损耗大
+
+2. 切片是数组的描述符，Go runtime 层面内部表示切片是一个结构体
+```go
+type slice struct {
+    array unsafe.Pointer    // 底层数组`某`元素指针，代表切片的启始
+    len int // 切片长度，当前切片中元素个数
+    cap int // 切片最大容量，cap>=len，取决于底层数组的长度
+}
+```
+
+3. 针对同一个底层数组的多个切片，经过修改值操作会产生相互影响
+
+4. 切片作为函数参数传递，传递的是runtime.slice实例，性能损耗小
+
+5. slice的动态扩容
 
 
 

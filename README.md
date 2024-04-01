@@ -560,7 +560,115 @@ type slice struct {
 
 4. 切片作为函数参数传递，传递的是runtime.slice实例，性能损耗小
 
-5. slice的动态扩容
+5. slice的动态扩容：当前底层数组容量无法满足的情况下，动态分配新的底层数组，新数组长度按照一定算法扩展。新数组建立以后，会将旧数组中的数据复制到新数组中，runtime slice指向新数组，旧数组GC
+
+6. 可预估容量的切片避免过多的内存分配和复制代价
 
 
+⭐️⭐️ map实现原理
 
+1. map是无序key:value pair，key必须是可比较的，使用map必须初始化，map是引用类型（意味着函数内可以更改值）
+```go
+var statusText = map[int]string {
+    StatusOK: "OK",
+    StatusCreated: "Created",
+    StatusAccepted: "Accepted",
+    ...
+}
+
+icookies := make(map[string][]*Cookie)
+
+http2commonLowerHeader := make(map[string]string, len(common))
+```
+
+2. [map基本操作](./ch3/sources/map_op.go)
+
+3. [map遍历](./ch3/sources/tmap.go)
+
+4. [map固序遍历](./ch3/sources/fixed_map.go)
+
+5. ⭐️ runtime map
+```go
+m := make(map[keyType]valType, capcityhint) -> m := runtime.makemap(maptype, capacityhint, m)
+v:= m["key"] -> v := runtime.mapaccess1(maptype, m, "key")
+v, ok := m["key"] -> v, ok := runtime.mapaccess2(maptype, m, "key)
+m["key"] = "value" -> v := runtime.mapassign(maptype, m, "key")
+delete(m, "key") -> runtime.mapdelete(maptype, m, "key")
+...
+```
+
+6. ⭐️ [`并发不安全map`](./ch3/sources/unsafemap.go) 不支持并发写
+
+7. 尽量预估map的容量
+
+⭐️⭐️ string类型
+
+1. string类型的数据是`不变`的
+```go
+func main() {
+    s := "hello world!"
+    fmt.Println("original string:", s)
+
+    sl := []byte(s)
+    sl[0] = 'w'
+    fmt.Println("slice:", string(sl))
+    fmt.Println("after reslice, the original string is:", s)
+}
+```
+
+2. `零值可用`
+```go
+var s string
+fmt.Println(s)  // ""
+fmt.Println(len(s)) // 0
+```
+
+3. string基本操作
+```go
+len(s)
+
+s := "hello,"
+s = s + " world!"
+s += ":)"
+fmt.Println(s)  // hello, world:)
+
+== != >= <= > <
+```
+
+4. string比较规则（`长度、数据指针、内容`）
+
+5. string内部表示
+```go
+type stringStruct struct {
+    str unsafe.Pointer
+    len int
+}
+
+func rawstring(size int) (s string, b []byte) {
+    p := mallocgc(uintptr(size), nil, false))
+    stringStructOf(&s).str = p
+    stringStructOf(&s).len = size
+
+    *(*slice)(unsafe.Pointer(&b)) = slice {p, size, zise}   // 该slice写入数据后则GC
+
+    return
+}
+```
+
+6. [`string的高效构造`](./ch3/str_test.go)
+```go
+预初始化strings.Builder
+预初始化bytes.Buffer & strings.Join
+未预初始化 strings.Builder & bytes.Buffer
+fmt.Sprintf
+```
+
+7. string、[]byte、[]rune双向转换
+
+⭐️⭐️ package
+
+package是go的基本单元，用于组织源代码
+
+1. 在每个源文件显式列出所有依赖的包导入
+
+2. Go包之间不能存在循环依赖，是一张有向无环图，包可以单独编译也可以并行编译

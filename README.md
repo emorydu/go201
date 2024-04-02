@@ -672,3 +672,224 @@ package是go的基本单元，用于组织源代码
 1. 在每个源文件显式列出所有依赖的包导入
 
 2. Go包之间不能存在循环依赖，是一张有向无环图，包可以单独编译也可以并行编译
+
+3. [包变量声明语句中的表达式求值顺序](./ch3/sources/evaluation_order_1.go)
+```go
+// ready for initialization：未初始化的且不含有对应初始化表达式或初始化表达式不依赖任何未初始化变量的变量
+// 包级变量的初始化按照变量声明的先后顺序进行
+// 包级变量的初始化过程就是按照声明顺序递归寻找下一个read for initialization
+```
+
+4. [Go规定表达式操作数中的所有函数、方法以及channel操作按照从左到右的次序进行求值](./ch3/sources/evaluation_order_4.go)
+
+5. [赋值语句求值](./ch3/sources/evaluation_order_6.go)
+
+6. [惰性求值](./ch3/sources/evaluation_order_7.go)
+
+⭐️ 代码块与作用域
+
+1. 显示代码块：使用{}包含的
+
+2. Universe代码块（隐式代码块）：所有Go源码都在此处
+
+3. 包代码块（隐式代码块）：每个包都有一个，放置该包的所有Go源码
+
+4. 文件代码块（隐式代码块）：每个文件具有一个，包含着该文件中所有Go源码
+
+5. switch、select语句中每个子句都被视为一个隐式代码块
+
+6. 预定义标识符(make new cap len...)的作用域是Universe代码块
+
+7. 函数外声明的常量、变量、类型或函数[`除了方法`]对应的标识符的作用域是Package代码块
+
+8. Go源文件中导入的包名称的作用域是Flle代码块
+
+9. receiver、parameters、return var对应的标识符作用域是函数体
+```go
+func Foo() {
+    if a := 1; true {
+        fmt.Println(a)
+    }
+}
+=>
+func Foo() {
+    {
+        a := 1
+        if true {
+            fmt.Println(a)
+        }
+    }
+}
+
+func Foo() {
+    if a, b := 1, 2; false {
+        fmt.Println(a)
+    } else {
+        fmt.Println(b)
+    }
+}
+=>
+func Foo() {
+    {
+        a, b := 1, 2
+        if false {
+            fmt.Println(a)
+        } else {
+            fmt.Println(b)
+        }
+    }
+}
+
+func main() {
+    if a := 1; false {
+    } else if b := 2; false {
+    } else if c := 3; false {
+    } else {
+        println(a, b, c)
+    }
+}
+=>
+func main() {
+    {
+        a := 1
+        if false {
+
+        } else {
+            { 
+                b := 2
+                if false {
+
+                } else {
+                    {
+                        c := 3
+                        if false {
+
+                        } else {
+                            println(a, b, c)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+```go
+for a, b := 1, 10; a < b; a++ {
+    ...
+}
+=>
+{
+    a, b := 1, 10
+    for ; a < b; a++ {
+        ...
+    }
+}
+
+var numbers = []int {1, 2, 3}
+for i, n := range numbers {
+    ...
+}
+=>
+var numbers = []int {1, 2, 3}
+{
+    i, n := 0, 0
+    for i, n = range numbers {
+        ...
+    }
+}
+```
+```go
+switch x, y := 1, 2; x + y {
+case 3:
+    a := 1
+    fmt.Println("case1: a = ", a)
+    fallthrough
+case 10:
+    a := 5
+    fmt.Println("case2: a = ", a)
+    fallthrough
+default:
+    a := 7
+    fmt.Println("default case: a = ", a)
+}
+=>
+{
+    x, y := 1, 2
+    switch x + y {
+    case 3:
+        {
+            a := 1
+            fmt.Println("case1: a = ", a)
+        }   
+    fallthrough 
+    case 10:
+        {
+            a := 5
+            fmt.Println("case2: a = ", a)
+        } 
+    fallthrough 
+    default:
+        {
+            a := 7
+            fmt.Println("default case: a = ", a)
+        } 
+    }
+}
+```
+```go
+c1 := make(chan int)
+c2 := make(chan int, 1)
+c2 <- 11
+
+select {
+case c1 <- 1:
+    fmt.Println("SendStmt case has been chosen")
+case i := <-c2:
+    _ = i
+    fmt.Println("RecvStmt case has been chosen")
+default:
+    fmt.Println("defualt case has been chosen")
+}
+=>
+c1 := make(chan int)
+c2 := make(chan int, 1)
+c2 <- 11
+
+select {
+case c1 <- 1:
+    {
+        fmt.Println("SendStmt case has been chosen")
+    }
+case "when":
+    {
+        i := <-c2
+        _ = i
+        fmt.Println("RecvStmt case has been chosen")
+    }
+default:
+    {
+        fmt.Println("defualt case has been chosen")
+    }
+}
+```
+
+⭐️⭐️ `快乐路径`
+
+1. 出现错误，快速返回，成功逻辑不要嵌入if-else语句中
+
+⭐️⭐️ For-Range
+
+1. [迭代变量重用](./ch3/sources/range1.go)
+
+2. [迭代的是副本](./ch3/sources/range4.go)`slice, string, map, array, channel`
+
+3. [string迭代的是rune](./ch3/sources/string_range.go)
+
+4. [⭐️map-range](./ch3/sources/map_range.go)
+
+5. [⭐️channel-range](./ch3/sources/channel_range.go)
+
+6. [break](./ch3/sources/break.go)
+
+7. [break-label](./ch3/sources/break-label.go)

@@ -893,3 +893,83 @@ default:
 6. [break](./ch3/sources/break.go)
 
 7. [break-label](./ch3/sources/break-label.go)
+
+⭐️⭐️ [init函数]
+
+函数与方法是Go程序的逻辑块基本单元
+
+1. init函数：包初始化时调用，多个init函数在初始化Go包时，按照一定次序逐一调用，每个init只执行一次，常用于包级数据初始化以及初始化状态检查
+
+2. 绝不依赖init函数的执行次序：先被传递给Go编译器的源文件中的init函数先被执行
+
+3. Go程序初始化顺序：import->const->var->init（深度优先查找）
+
+4. init函数使用场景
+```go
+// 重置包级变量值
+func init() {
+    CommandLine.Usage = commandLineUsage
+}
+
+
+var closedchan = make(chan struct{})
+
+func init() {
+    close(closedchan)
+}
+
+// 包级变量初始化
+var specialBytes [16]byte
+
+func special(b byte) bool {
+    return b < utf8.RuneSelf && specialBytes[b%16]&(1<<(b/16)) != 0
+}
+
+func init() {
+    for _, b := range []byte(`\.+*?()|[]{}^$`) {
+        specialBytes[b%16] | 1 << (b / 16)
+    }
+}
+
+func init() {
+    sort.Sort(sort.Reverse(byMaskLength(rfc6742policyTable)))
+}
+
+var (
+    http2VerboseLogs bool
+    http2logFrameWrites bool
+    http2logFrameReads bool
+    http2inTests bool
+)
+
+func init() {
+    e := os.Getenv("GODEBUG")
+    if strings.Contains(e, "http2debug=1") {
+        http2VerboseLogs = true
+    }
+    if strings.Contains(e, "http2debug=2") {
+        http2VerboseLogs = true
+        http2logFrameWrites = true
+        http2logFrameReads = true
+    }
+}
+
+
+// init函数中注册模式
+import (
+    "database/sql"
+    _ "github.com/lib/pq" // func init() {sql.Register("postgres", &Driver{})}
+)
+
+func main() {
+    db, err := sql.Open("postgres", "protocol")
+    if err != nil {
+        panic(err)
+    }
+    ...
+}
+```
+
+5. [init注册模式(工厂模式)](./ch4/sources/get_image_size.go)
+
+6. init中检查失败一般直接panic

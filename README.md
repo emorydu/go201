@@ -894,7 +894,7 @@ default:
 
 7. [break-label](./ch3/sources/break-label.go)
 
-⭐️⭐️ [init函数]
+⭐️⭐️ `init函数`
 
 函数与方法是Go程序的逻辑块基本单元
 
@@ -973,3 +973,178 @@ func main() {
 5. [init注册模式(工厂模式)](./ch4/sources/get_image_size.go)
 
 6. init中检查失败一般直接panic
+
+⭐️⭐️ 函数是一等公民
+
+可以像对待值一样对待这种语法元素，这个语法元素就被称为一等公民
+
+1. 创建函数
+```go
+// 普通创建
+func newPrinter() *pp {
+    p := ppFree.Get().(*pp)
+    p.panicking = false
+    p.erroring = false
+    p.wrapErrs = false
+    p.fmt.init(&p.buf)
+    return p
+}
+
+// 函数内创建
+func hexdumpWords(p, end uintptr, mark func(uintptr) byte) {
+    p1 := func(x uintptr) {
+        var buf [2 * sys.PtrSize]byte
+        for i := len(buf) - 1; i >= 0; i-- {
+            if x&0xF < 10 {
+                buf[i] = byte(x&0xF) + '0'
+            } else {
+                buf[i] = byte(x&0xF) - 10 + 'a'
+            }
+            x >>= 4
+        }
+        gwrite(buf[:])
+    }
+    ...
+}
+
+// 作为类型
+type HandlerFunc func(ResponseWriter, *Request)
+
+type visitFunc func(ast.Node) ast.Visitor
+
+type action func(current score) (result score, turnIsOver bool)
+
+// 存储到变量
+func vdsoParseSymbols(info *vdsoInfo, version int32) {
+    ...
+    apply := func(symIndex uint32, k, vdsoSysmbolKey) bool {
+        ...
+        return true
+    }
+    ...
+}
+
+// 作为函数入参
+func AfterFunc(d Duration, f func()) *Timer {
+    t := &Timer {
+        r: runtimeTimer{
+            when: when(d),
+            f: goFunc,
+            arg: f,
+        },
+    }
+    startTimer(&t.r)
+    return t
+}
+
+// 作为函数返回值
+func makeCutsetFunc(cutset string) func(rune) bool {
+    ...
+    return func(r rune) bool {
+        return IndexRune(cutset, r) >= 0
+    }
+}
+```
+
+2. 函数可以放入数组、切片、map等结构中，可以赋值给interface{}，[建立元素为函数的channel](./ch4/sources/func_channel.go)
+
+3. [函数显式类型转换](./ch4/sources/conv_func.go)
+
+4. 闭包：在函数内部定义的匿名函数，并且允许该匿名函数访问定义它的外部函数的作用域
+
+5. [柯里化函数](./ch4/sources/currying.go)：接受多个参数的函数变换成接受一个单一参数的函数，并返回接受余下的参数和返回结果的新函数
+
+6. [函子](./ch4/sources/functor.go)：是一个容器类型，该容器类型需要实现一个方法，接受一个函数类型参数，并在容器的每个元素上应用那个函数，得到一个新函子，原函子容器内部的元素值不受影响）
+
+7. `延续传递式` 不推荐使用
+```go
+func Max(n int, m int) int {
+    if n > m {
+        return n
+    } else {
+        return m
+    }
+}
+
+=>
+
+func Max(n int, m int, f func(int)) {
+    if n > m {
+        f(n)
+    } else {
+        f(m)
+    }
+}
+
+func main() {
+    Max(5, 6, func(y int) {fmt.Printf("%d\n", y)})
+}
+
+
+func factorial(n int, f func(int)) {
+    if n == 1 {
+        f(1)
+    } else {
+        factorial(n-1, func(y int) { f(n * y) })
+    }
+}
+
+func main() {
+    factorial(5, func(y int) { fmt.Printf("%d\n", y) })
+}
+```
+
+⭐️⭐️ defer
+
+defer后只能接函数或者方法，执行方式LIFO，即使遇到panic
+
+1. 释放资源
+```go
+func WriteToFile(fnmae string, data []byte, mu *sync.Mutex) error {
+    mu.Lock()
+    defer mu.Unlock()
+    f, err := os.OpenFile(fname, os.O_RDWR, 0666)
+    if err != nil {
+        return err
+    }
+    defer f.Close()
+
+    _, err = f.Seek(0, 2)
+    if err != nil {
+        return err
+    }
+
+    _, err = f.Write(data)
+    if err != nil {
+        return err
+    }
+
+    return f.Sync()
+}
+```
+
+2. [拦截panic](./ch4/sources/in_panic.go)
+
+3. [修改具名返回值](./ch4/sources/mod_ret.go)
+
+4. [defer调试](./ch4/sources/ddebug.go)
+
+5. 还原旧变量值
+```go
+func init() {
+    oldFsinit := fsinit
+    defer func() { fsinit = oldFsinit }()
+    fsinit = func() {}
+    Mkdir("/dev", 0555)
+    ...
+}
+```
+
+6. 支持defer的内置函数
+```go
+support: close, copy, delete, print, recover
+`unsupport: append, cap, len, make, new`
+```
+
+7. [注意defer求值时机](./ch4/sources/deferv.go)
+

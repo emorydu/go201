@@ -1250,4 +1250,11 @@ t.M2()  // ok
 2. `类型别名的方法集合`：与原类型拥有完全相同的方法集合，无论原类型是接口还是非接口类型
 
 
+[可变长参数应用模式](./ch4/sources/args.go)
+
+[模拟函数重载](./ch4/sources/mockoverload.go)`Go不支持函数重载!`
+
+[模拟可选参数与默认参数的实现](./ch4/sources/mockoption.go)`Go不支持函数重载!`
+
+⭐️⭐️⭐[`Optional模式`](./optionalmod.go)
 

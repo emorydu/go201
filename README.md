@@ -655,7 +655,7 @@ func rawstring(size int) (s string, b []byte) {
 }
 ```
 
-6. [`string的高效构造`](./ch3/str_test.go)
+6. [`string的高效构造`](./ch3/sources/str_test.go)
 ```go
 预初始化strings.Builder
 预初始化bytes.Buffer & strings.Join
@@ -1254,7 +1254,7 @@ t.M2()  // ok
 
 [模拟函数重载](./ch4/sources/mockoverload.go)`Go不支持函数重载!`
 
-[模拟可选参数与默认参数的实现](./ch4/sources/mockoption.go)`Go不支持函数重载!`
+[模拟可选参数与默认参数的实现](./ch4/sources/mockoption.go)
 
-⭐️⭐️⭐[`Optional模式`](./optionalmod.go)
+⭐️⭐️⭐[`Optional模式`](./ch4/sources/optionalmod.go)
 

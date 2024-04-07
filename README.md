@@ -1256,5 +1256,120 @@ t.M2()  // ok
 
 [模拟可选参数与默认参数的实现](./ch4/sources/mockoption.go)
 
-⭐️⭐️⭐[`Optional模式`](./ch4/sources/optionalmod.go)
+⭐️⭐️⭐ [`Optional模式`](./ch4/sources/optionalmod.go)
 
+⭐️⭐️⭐⭐⭐ 接口内部表示
+```go
+// runtime
+// Go中每种类型都有唯一的_type信息，无论是内置原生类型还是自定义类型
+// Go runtime会为程序内的全部类型建立只读的共享_type信息表，因此
+// 拥有相同动态类型的同类接口类型变量的_type/tab信息是相同的，而接口类型
+// 变量的data部分执行一个动态分配的内存空间，该内存空间存储的是赋值给接口
+// 类型变量的动态类型变量的值。
+type iface struct { // 拥有方法的接口类型变量
+    /*
+    type itab struct {
+        // type interfacetype struct {
+        //     typ _type    // 类型信息
+        //     pkgpath data // 包路径名
+        //     mhdr []imethod   // 接口方法集合切片
+        // } 
+        inter *interfacetype    // 该接口类型自身信息
+        _type *_type    // 接口类型变量的动态类型信息
+        hash uint32 
+        _ [4]byte
+        fun [1]uintptr  // 动态类型已实现的接口方法的调用地址数组
+    }
+    */
+    tab *itab   // 接口本身的信息（类型信息、方法列表信息、动态类型所实现的方法的信息...）
+    data unsafe.Pointer // 指向当前赋值给该接口类型变量的动态类型
+}
+
+type eface struct { // 没有方法的空接口类型变量 (interface{})
+    /*
+    type _type struct {
+        size uintptr
+        ptrdata uintptr
+        tflag tflag
+        align uint8
+        fieldalign uint8
+        kind uint8
+        alg *typeAlg
+        gcdata *byte
+        str nameOff
+        ptrToThis typeOff
+    }
+    */
+    _type *_type    // 指向一个_type类型结构，该结构为该接口类型变量的动态类型信息
+    data unsafe.Pointer // 指向当前赋值给该接口类型变量的动态类型
+}
+```
+
+1. 接口类型变量具有静态类型，在编译阶段进行类型检查，接口类型变量兼具动态类型
+
+2. 接口类型变量在程序运行时可以被赋值为不同的动态类型变量，从而支持运行时多态
+
+3. 判断接口类型变量是否相同`只需判断_type/tab是否相同以及data指针所指向的内存空间所存储的数据值是否相同`
+
+4. [`nil error值 != nil`](./ch5/sources/inter1.go)
+
+5. [nil接口变量](./ch5/sources/nilinterface.go)
+
+6. [空接口类型变量](./ch5/sources/emptyinterface.go)
+
+7. [非空接口类型变量](./ch5/sources/nonemptyinterface.go)
+
+8. [空接口类型变量与非空接口类型变量的等值比较](./ch5/sources/typevs.go)
+
+⭐️⭐️⭐⭐⭐ 接口使用原则
+
+1. 尽量定义小接口
+```go
+// 接口越小，抽象程度越高，被接纳度越高
+// 易于实现和测试
+// 契约职责单一，易于复用组合（尝试通过嵌入其他已有接口类型构建新接口类型）
+```
+
+2. 尽量不使用空接口作为函数参数
+```go
+// 空接口不提供任何信息
+// 使用空接口作为函数参数会失去静态类型语言类型安全检查的保护屏障
+```
+
+3. [使用接口作为程序水平组合的连接点](./ch5/sources/horizontal.go) [中间件](./ch5/sources/md.go)
+```go
+// 一切都是组合
+// 垂直组合（类型嵌入）-> 进而实现方法实现的复用、接口定义重用
+// 水平组合（函数参数）-> 作为程序水平组合的连接点
+
+// 包裹函数：接受接口类型参数，并返回与其参数类型相同的返回值
+func LimitReader(r Reader, n int64) Reader { return &LimiterdReader{r, n} }
+
+type LimitedReader struct {
+    R Reader
+    N int64
+}
+
+func (l *LimitedReader) Read(p []byte) (n int, err error) {
+    ...
+}
+```
+
+4. [使用接口提高代码可测性](./ch5/sources/v2/mail_test.go)
+
+
+⭐️⭐️⭐⭐⭐ 并发编程
+
+1. 并行（并行是启动多个单线程应用的实例，每个实例运行在一个核上，尽可能利用多核计算资源）
+
+2. 并发（将应用分解为多个基本执行单元，可独立运行的模块，每个模块运行在一个单独的操作系统线程中）
+
+3. Go原生并发，轻量高效，不是使用传统操作系统线程作为承载分解后的代码片段的基本执行单元，使用goroutine为并发程序设计提供原生支持
+```go
+// goroutine：由Go运行时负责调度的用户层轻量级线程
+// goroutine优势
+// 1. 占用资源小，每个goroutine初始栈2KB
+// 2. go runtime调度而不是操作系统调度，上下文切换代价小
+// 3. 语言原生支持
+// 4. 内置channel作为goroutine间通信原语
+```

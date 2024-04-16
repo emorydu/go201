@@ -1389,4 +1389,303 @@ M：Machine，表示真正的执行计算资源，在绑定了有效的P后，�
 
 2. 抢占式调度（解决局部“饿死”问题`一个G中出现死循环的代码逻辑，那么G将永久占用分配给他的P和M，而位于同一个P中的其他G得不到调度`）
 
-3. CSP并发模型
+3. CSP并发模型（一个符合CSP模型的并发程序应该是一组通过输入/输出原语连接起来的P的集合）
+```go
+P：Process进程，代表任何顺序处理逻辑的封装，它获取输入数据（或从其他P的输出获取），并生产可以被其他P消费的输出数据
+```
+
+⭐️⭐️⭐⭐⭐ Go常见并发模式
+
+1. 创建模式
+```go
+go fmt.Println("I am goroutine")
+
+c := srv.newConn(rw)
+go c.serve(connCtx)
+
+
+type T struct {}
+
+func spawn(f func()) chan T {
+    c := make(chan T)
+    go func() {
+        ...
+        f()
+        ...
+    }()
+
+    return c
+}
+
+func main() {
+    c := spawn(func(){})
+}
+```
+2. 退出模式
+```go
+// 一次性任务
+func (d *Dialer) DialContext(ctx context.Context, network, address string) (Conn, error) {
+    ...
+    if oldCancel := d.Cancel(); oldCancel() != nil {
+        subCtx, cancel := context.WithCancel(ctx)
+        defer cancel()
+        go func() {
+            select {
+            case <-oldCancel:
+                cancel()
+            case <-subCtx.Done():
+            }
+        }()
+        ctx = subCtx
+    }
+    ...
+}
+
+// 常驻后台执行任务 monitor、watch
+func gcBgMarkStartWorkers() {
+    for _, p := range allp {
+        if p.gcBgMarkWorker == 0 {
+            go gcBgMarkWorker(p)
+            notetsleepg(&work.bgMarkReady, -1)
+            noteclear(&work.bgMarkReady)
+        }
+    }
+}
+
+func gcBgMarkWorker(_p_ *p) {
+    gp := getg()
+    ...
+    for {
+        ...
+    }
+}
+```
+
+3. join模式
+```go
+// 等待一个goroutine退出
+func worker(args ...any) {
+    if len(args) == 0 {
+        return
+    }
+    interval, ok := args[0].(int)
+    if !ok {
+        return
+    }
+
+    time.Sleep(time.Second * (time.Duration(interval)))
+}
+
+func spawn(f func(args ...any), args ...any) chan struct {} {
+    c := make(chan struct{})
+    go func() {
+        f(args...)
+        c <- struct{}{}
+    }()
+    return c
+}
+
+func main() {
+    done := spawn(worker, 5)
+    println("spawn a worker goroutine")
+    <-done
+    println("worker done")
+}
+
+// 获取goroutine的退出状态
+var OK = errors.New("ok")
+
+func worker(args ...any) error {
+    if len(args) == 0 {
+        return errors.New("invalid args")
+    }
+    interval, ok := args[0].(int)
+    if !ok {
+        return errors.New("invalid interval arg")
+    }
+    
+    time.Sleep(time.Second * (time.Duration(interval)))
+    return OK
+}
+
+func spawn(f func(args ...any) error, args ...any) chan error {
+    c := make(chan error)
+    go func() {
+        c <- f(args...)
+    }()
+    return c
+}
+
+func main() {
+    done := spawn(worker, 5)
+    println("spawn worker1")
+    err := <-done
+    fmt.Println("worker1 done:", err)
+    done = spawn(worker)
+    println("spawn worker 2")
+    err = <-done
+    fmt.Println("worker2 done:", err)
+}
+
+// 等待多个goroutine退出
+func worker(args ...any) {
+    if len(args) == 0 {
+        return
+    }
+    interval, ok := args[0].(int)
+    if !ok {
+        return
+    }
+    time.Sleep(time.Second * (time.Duration(interval)))
+}
+
+func spawnGroup(n int, f func(args ...any), args ...any) chan struct{} {
+    c := make(chan struct{})
+    var wg sync.WaitGroup
+
+    for i := 0; i < n; i++ {
+        wg.Add(1)
+        go func(i int) {
+            name := fmt.Sprintf("worker-%d:", i)
+            f(args...)
+            println(name, "done")
+            wg.Done()
+        }(i)
+    }
+
+    go func() {
+        wg.Wait()
+        c <- struct{}{}
+    }()
+
+    return c
+}
+
+func main() {
+    done := spawnGroup(5, worker, 3)
+    println("spawn a group of workers")
+    <-done
+    println("group workers done")
+}
+
+// 超时机制的等待
+func main() {
+    done := spawnGroup(5, worker, 30)
+    println("spawn a group of workers")
+
+    timer := time.NewTimer(time.Second * 5)
+    defer timer.Stop()
+    select {
+    case <-timer.C:
+        println("wait group workers exit timeout!")
+    case <-done:
+        println("group workers done")
+    }
+}
+```
+
+4. notify-and-wait模式
+```go
+// 通知并等待一个goroutine退出
+func worker(j int) {
+    time.Sleep(time.Second * (time.Duration(j)))
+}
+
+func spawn(f func(int)) chan string {
+    quit := make(chan string)
+    go func() {
+        var job chan int
+        for {
+            select {
+            case j := <-job:
+                f(j)
+            case <-quit:    
+                quit <- "ok"
+            }
+        }
+    }()
+    return quit
+}
+
+func main() {
+    quit := spawn(worker)
+    println("spawn a worker goroutine")
+
+    time.Sleep(5 * time.Second)
+
+    println("notify the worker to exit...")
+    quit <- "exit"
+
+    timer := time.NewTimer(time.Second * 10)
+    defer timer.Stop()
+    select {
+    case status := <-quit:    
+        println("worker done:", status)
+    case <-timer.C:
+        println("wait worker exit timeout")
+    }
+}
+
+// 通知并等待多个goroutine退出
+func worker(j int) {
+    time.Sleep(time.Second * (time.Duration(j)))
+}
+
+func spawnGroup(n int, f func(int)) chan struct{} {
+    quit := make(chan struct{})
+    job := make(chan int)
+    var wg sync.WaitGroup
+
+    for i := 0; i < n; i++ {
+        wg.Add(1)
+        go func(i int) {
+            defer wg.Done()
+
+            name := fmt.Sprintf("worker-%d:", i)
+            for {
+                j, ok := <- job
+                if !ok {
+                    println(name, "done")
+                    return
+                }
+                worker(j)
+            }
+        }(i)
+    }
+
+    go func() {
+        <-quit
+        close(job)
+        wg.Wait()
+        quit <- struct{}{}
+    }()
+
+    return quit
+}
+
+func main() {
+    quit := spawnGroup(5, worker)
+    println("spawn a group of workers")
+
+    time.Sleep(5 * time.Second)
+    println("notify the worker group to exit...")
+
+    quit <- struct{}{}
+
+    timer := time.NewTimer(time.Second * 5)
+    defer timer.Stop()
+    select {
+    case <-timer.C:
+        println("wait group workers exit timeout!")
+    case <-quit:
+        println("group workers done")
+
+    }
+}
+```
+
+[退出模式的应用](./ch6/sources/app.go)
+
+5. [管道模式](./ch6/sources/c.go)
+
+6. [扇入扇出模式](./ch6/sources/channel/main.go)
